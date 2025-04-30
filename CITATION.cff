@@ -17,7 +17,7 @@ authors:
       Australiaia.
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.15312452
+    value: 10.5281/zenodo.15312728
 repository-code: 'https://github.com/pnadaa/fasta_nibbler'
 abstract: >-
   A simple program that extracts the first and last number
@@ -30,5 +30,5 @@ keywords:
   - genome
   - fasta
 license: MIT
-version: 1.0.1
+version: 1.0.3
 date-released: '2025-05-01'
