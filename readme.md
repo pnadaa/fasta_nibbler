@@ -15,4 +15,4 @@ Usage: python fasta_nibbler.py --type --input (--output) (--basepairs)
 
 
 If you found this useful for your project, please cite me! 
-[![DOI](https://zenodo.org/badge/307380211.svg)](https://zenodo.org/badge/latestdoi/307380211)
+[![DOI](https://zenodo.org/badge/975677185.svg)](https://doi.org/10.5281/zenodo.15312728)
