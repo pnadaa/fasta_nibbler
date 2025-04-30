@@ -1,0 +1,34 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: fasta_nibbler
+message: >-
+  Get a specified number of the first and last base pairs
+  from fasta sequences
+type: software
+authors:
+  - given-names: Christopher
+    family-names: Jin
+    email: christopher.jin@unsw.edu.au
+    affiliation: >-
+      School of Biotechnology and Biomolecular Sciences,
+      University of New South Wales, Sydney, NSW,
+      Australiaia.
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.15312452
+repository-code: 'https://github.com/pnadaa/fasta_nibbler'
+abstract: >-
+  A simple program that extracts the first and last number
+  of base pairs from each sequence of a fasta file.
+
+
+  Usage: python get_first_and_last.py --type --input
+  (--output) (--basepairs)
+keywords:
+  - genome
+  - fasta
+license: MIT
+version: 1.0.1
+date-released: '2025-05-01'
