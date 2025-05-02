@@ -74,19 +74,19 @@ for line in data:
 Formatting the output name based on the args or based on the type of processing
 """
 
-if args.output == None:
-    if args.type == "1":
+if str(args.output) == "None":
+    if str(args.type) == "1":
         output_file = f"fullSequence_{args.input}"
-    elif args.type == "2":
+    elif str(args.type) == "2":
         output_file = f"5prime_{args.input}"
-    elif args.type == "3":
+    elif str(args.type) == "3":
         output_file = f"3prime_{args.input}"
-    elif args.type == "4":
+    elif str(args.type) == "4":
         output_file = f"5and3prime_{args.input}"
     else:
-        output_file = "output"
+        output_file = str(args.output)
 else:
-    output_file = args.output
+    output_file = str(args.output)
 
 
 """
@@ -94,17 +94,17 @@ Writes any content parsed into the file.
 """
 with open(f"{output_file}", "w", encoding="utf-8") as file:
     i = 0
-    for insetion_sequences in sequenceArray:
-        if args.type == "1":
+    for sequences in sequenceArray:
+        if str(args.type) == "1":
             file.write(f">fullseq_{sequenceArray[i][0]}")
             file.write(f"{sequenceArray[i][1]}")
-        elif args.type == "2":
+        elif str(args.type) == "2":
             file.write(f">5_prime_{sequenceArray[i][0]}")
             file.write(f"{sequenceArray[i][2]}")
-        elif args.type == "3":
+        elif str(args.type) == "3":
             file.write(f">3_prime_{sequenceArray[i][0]}")
             file.write(f"{sequenceArray[i][3]}")
-        elif args.type == "4":
+        elif str(args.type) == "4":
             file.write(f">5_prime_{sequenceArray[i][0]}")
             file.write(f"{sequenceArray[i][2]}")
             file.write(f">3_prime_{sequenceArray[i][0]}")
