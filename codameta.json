@@ -29,6 +29,6 @@
     "license": "https://spdx.org/licenses/MIT",
     "name": "fasta_nibbler",
     "programmingLanguage": "Python 3",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "issueTracker": "https://github.com/pnadaa/fasta_nibbler/issues"
 }
