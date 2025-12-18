@@ -1,113 +1,238 @@
+from __future__ import annotations
+
 import argparse
+import logging
+from pathlib import Path
+from typing import Iterable, Iterator, Sequence, Tuple
 
-# From stackoverflow: https://stackoverflow.com/questions/64980270/how-to-allow-only-positive-integer-using-argparse
-def check_positive(value):
-    """
-    This function checks if the argparse input is a pos integer for the basepairs argument
-    """
+LOGGER = logging.getLogger(__name__)
+
+
+def positive_int(value: str) -> int:
+    """Argparse type: require a strictly positive integer."""
     try:
-        value = int(value)
-        if value <= 0:
-            raise argparse.ArgumentTypeError("{} is not a positive integer".format(value))
-    except ValueError:
-        raise Exception("{} is not a positive integer".format(value))
-    return value
+        ivalue = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{value!r} is not an integer") from exc
 
-def check_type(value):
+    if ivalue <= 0:
+        raise argparse.ArgumentTypeError(f"{ivalue} is not a positive integer")
+    return ivalue
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="first_last_fasta",
+        description=(
+            "Extract the first and/or last N base pairs from each FASTA record "
+            "and write to a new FASTA file."
+        ),
+    )
+
+    parser.add_argument(
+        "-t",
+        "--type",
+        required=True,
+        type=int,
+        choices=(1, 2, 3, 4),
+        help=(
+            "Output type: 1=full sequence, 2=5' ends, 3=3' ends, 4=5' and 3' ends."
+        ),
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        required=True,
+        type=Path,
+        help="Input FASTA file, or a directory containing FASTA files.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help=(
+            "If --input is a file: output FASTA filepath. "
+            "If --input is a directory: output directory. "
+            "Default is derived from input."
+        ),
+    )
+    parser.add_argument(
+        "-bp",
+        "--basepairs",
+        type=positive_int,
+        default=300,
+        help="Number of base pairs to extract from each end (default: 300).",
+    )
+    parser.add_argument(
+        "--extensions",
+        nargs="+",
+        default=[".fa", ".fasta", ".fna", ".ffn", ".faa", ".frn"],
+        help=(
+            "File extensions to consider when --input is a directory "
+            "(default: common FASTA extensions)."
+        ),
+    )
+    parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help="When --input is a directory, search recursively.",
+    )
+    parser.add_argument(
+        "--wrap",
+        type=positive_int,
+        default=60,
+        help="Wrap FASTA sequence lines to this width (default: 60).",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable INFO-level logging.",
+    )
+
+    return parser.parse_args(argv)
+
+
+def iter_fasta_records(path: Path) -> Iterator[Tuple[str, str]]:
     """
-    This function checks if the argparse input is valid for the type argument
+    Stream FASTA records from a file.
+
+    Yields:
+        (header_without_>, sequence_without_whitespace)
     """
-    try:
-        value = int(value)
-        if (value <= 0 or value > 4):
-            raise argparse.ArgumentTypeError("{} is not a valid option".format(value))
-    except ValueError:
-        raise Exception("{} is not a positive integer".format(value))
-    return value
+    header: str | None = None
+    chunks: list[str] = []
+
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if header is not None:
+                    yield header, "".join(chunks)
+                header = line[1:].strip()
+                chunks = []
+            else:
+                chunks.append(line)
+
+    if header is not None:
+        yield header, "".join(chunks)
 
 
-parser = argparse.ArgumentParser(
-                    prog='First and last',
-                    description='This program extracts the first and/or last base pairs from sequences of a fasta file and writes into another file',
-                    epilog='Thank you for using! -Chris')
-parser.add_argument("-t", "--type", required=True, type = check_type, help="The type of output file: 1: full sequence (same as input), 2: 5' ends, 3: 3' ends, 4: 5' and 3' ends both in the same output file.")
-parser.add_argument("-i", "--input", required = True, help = "Name of the input filename, it cant take directories if the output is not written")
-parser.add_argument("-o", "--output", required = False, help = "What would you like the output file to be named? Default: 3/5_prime_ends.fasta")
-parser.add_argument("-bp", "--basepairs", type = check_positive, required = False, default = "300", help = "The number of base pairs to take from each end. Default = 300")
-
-args = parser.parse_args()
+def wrap_sequence(seq: str, width: int) -> str:
+    """Return sequence wrapped to fixed width with a trailing newline."""
+    if width <= 0:
+        return seq + "\n"
+    return "\n".join(seq[i : i + width] for i in range(0, len(seq), width)) + "\n"
 
 
-"""
-Loads the file and returns the data stored.
-"""  
-with open(f"{str(args.input)}", "r", encoding="utf-8") as file:
-    data = []
-    for line in file:
-        data.append(line)
-    file.close
+def ends(seq: str, bp: int) -> Tuple[str, str]:
+    """Return (5prime, 3prime); if seq shorter than bp, both are full seq."""
+    if len(seq) <= bp:
+        return seq, seq
+    return seq[:bp], seq[-bp:]
 
 
-#Transforms the data into an array for saving later
-i = 0
-sequenceArray = []
-miniSequenceArray = []
-for line in data:
-    if line.startswith(">"):
-        # Store the line with the sequence name and also the sequence on the next line
-        seqName = data[i][1:]
-        fullSequence = str(data[i + 1])
-        # Select the 5' end 3' ends of the sequence on the next line. If the sequence is shorter than 300bp, use the whole sequence for both instead
-        if len(fullSequence) > args.basepairs:
-            five_prime_bp = f"{data[i+1][:args.basepairs]}\n"
-            three_prime_bp = data[i+1][-(args.basepairs + 1):]
-        else:
-            five_prime_bp = fullSequence
-            three_prime_bp = fullSequence
-        # Save the sequence name and associated procesed sequences into an array for output
-        miniSequenceArray = [seqName, fullSequence, five_prime_bp, three_prime_bp]
-        sequenceArray.append(miniSequenceArray)
-    i += 1
+def type_label(type_id: int) -> str:
+    return {
+        1: "full",
+        2: "5prime",
+        3: "3prime",
+        4: "5and3prime",
+    }[type_id]
 
 
-"""
-Formatting the output name based on the args or based on the type of processing
-"""
-
-if str(args.output) == "None":
-    if str(args.type) == "1":
-        output_file = f"fullSequence_{args.input}"
-    elif str(args.type) == "2":
-        output_file = f"5prime_{args.input}"
-    elif str(args.type) == "3":
-        output_file = f"3prime_{args.input}"
-    elif str(args.type) == "4":
-        output_file = f"5and3prime_{args.input}"
-    else:
-        output_file = str(args.output)
-else:
-    output_file = str(args.output)
+def default_output_for_file(input_file: Path, type_id: int) -> Path:
+    label = type_label(type_id)
+    return input_file.with_name(f"{input_file.stem}.{label}.fasta")
 
 
-"""
-Writes any content parsed into the file.
-"""
-with open(f"{output_file}", "w", encoding="utf-8") as file:
-    i = 0
-    for sequences in sequenceArray:
-        if str(args.type) == "1":
-            file.write(f">fullseq_{sequenceArray[i][0]}")
-            file.write(f"{sequenceArray[i][1]}")
-        elif str(args.type) == "2":
-            file.write(f">5_prime_{sequenceArray[i][0]}")
-            file.write(f"{sequenceArray[i][2]}")
-        elif str(args.type) == "3":
-            file.write(f">3_prime_{sequenceArray[i][0]}")
-            file.write(f"{sequenceArray[i][3]}")
-        elif str(args.type) == "4":
-            file.write(f">5_prime_{sequenceArray[i][0]}")
-            file.write(f"{sequenceArray[i][2]}")
-            file.write(f">3_prime_{sequenceArray[i][0]}")
-            file.write(f"{sequenceArray[i][3]}")
-        i += 1
-file.close
+def collect_input_files(
+    input_path: Path, extensions: Iterable[str], recursive: bool
+) -> list[Path]:
+    if input_path.is_file():
+        return [input_path]
+
+    if not input_path.is_dir():
+        raise FileNotFoundError(f"Input path does not exist: {input_path}")
+
+    exts = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in extensions}
+    globber = input_path.rglob("*") if recursive else input_path.glob("*")
+    files = sorted(p for p in globber if p.is_file() and p.suffix.lower() in exts)
+    return files
+
+
+def process_one_file(
+    input_file: Path,
+    output_file: Path,
+    type_id: int,
+    bp: int,
+    wrap_width: int,
+) -> None:
+    records = iter_fasta_records(input_file)
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_file.open("w", encoding="utf-8") as out:
+        for header, seq in records:
+            five_p, three_p = ends(seq, bp)
+
+            if type_id == 1:
+                out.write(f">fullseq_{header}\n")
+                out.write(wrap_sequence(seq, wrap_width))
+            elif type_id == 2:
+                out.write(f">5_prime_{header}\n")
+                out.write(wrap_sequence(five_p, wrap_width))
+            elif type_id == 3:
+                out.write(f">3_prime_{header}\n")
+                out.write(wrap_sequence(three_p, wrap_width))
+            elif type_id == 4:
+                out.write(f">5_prime_{header}\n")
+                out.write(wrap_sequence(five_p, wrap_width))
+                out.write(f">3_prime_{header}\n")
+                out.write(wrap_sequence(three_p, wrap_width))
+            else:
+                raise ValueError(f"Unexpected type: {type_id}")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(levelname)s: %(message)s",
+    )
+
+    input_path: Path = args.input
+    input_files = collect_input_files(input_path, args.extensions, args.recursive)
+
+    if not input_files:
+        LOGGER.warning("No input FASTA files found under: %s", input_path)
+        return 2
+
+    # Output handling:
+    # - input is a file: --output is a file (optional)
+    # - input is a dir : --output is a dir (optional)
+    if input_path.is_file():
+        output_file = args.output if args.output is not None else default_output_for_file(input_path, args.type)
+        process_one_file(input_path, output_file, args.type, args.basepairs, args.wrap)
+        LOGGER.info("Wrote: %s", output_file)
+        return 0
+
+    output_dir = args.output if args.output is not None else (input_path / "first_last_out")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for f in input_files:
+        out_path = output_dir / default_output_for_file(f.name if isinstance(f.name, Path) else f, args.type).name  # safe name
+        # The above line is overly defensive; simplest is:
+        out_path = output_dir / f"{f.stem}.{type_label(args.type)}.fasta"
+        process_one_file(f, out_path, args.type, args.basepairs, args.wrap)
+        LOGGER.info("Wrote: %s", out_path)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

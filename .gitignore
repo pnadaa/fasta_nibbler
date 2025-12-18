@@ -174,3 +174,7 @@ cython_debug/
 .pypirc
 
 .git/
+
+# Non-example fastas and log files
+*.fasta
+*.OU
